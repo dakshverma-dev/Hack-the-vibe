@@ -1,19 +1,15 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-let _openai: OpenAI | null = null;
+let _model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]> | null = null;
 
-export function getOpenAI(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+export function getModel() {
+  if (!_model) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is not set");
+    }
+    const genAI = new GoogleGenerativeAI(apiKey);
+    _model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   }
-  return _openai;
+  return _model;
 }
-
-// Keep named export for convenience
-export const openai = {
-  get chat() {
-    return getOpenAI().chat;
-  },
-};
