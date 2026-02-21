@@ -1,6 +1,6 @@
 # ResumeAgent AI 🤖
 
-> **Land Your Dream Job in 60 Seconds** — AI-powered resume optimizer built with Next.js 14 and GPT-4o.
+> **Land Your Dream Job in 60 Seconds** — AI-powered resume optimizer built with Next.js 14 and Google Gemini.
 
 ## ✨ Features
 
@@ -16,7 +16,7 @@
 - **Next.js 14** (App Router)
 - **TypeScript**
 - **Tailwind CSS**
-- **OpenAI GPT-4o** (AI backbone)
+- **Google Gemini 1.5 Flash** (AI backbone, free tier)
 - **Cheerio** (job posting scraper)
 - **Framer Motion** (animations)
 - **jsPDF** (PDF export)
@@ -27,7 +27,7 @@
 
 - Node.js 18+
 - npm or yarn
-- An [OpenAI API key](https://platform.openai.com/api-keys)
+- A [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier available)
 
 ### Installation
 
@@ -46,10 +46,14 @@
    ```bash
    cp .env.local.example .env.local
    ```
-   Then edit `.env.local` and add your OpenAI API key:
+   Then edit `.env.local` and add your Gemini API key:
    ```
-   OPENAI_API_KEY=your_openai_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
+   > **How to get a free Gemini API key:**
+   > 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+   > 2. Sign in with your Google account
+   > 3. Click **Create API key** and copy the key
 
 4. **Run the development server**
    ```bash
@@ -67,7 +71,7 @@
 │   ├── globals.css           # Global styles & CSS variables
 │   └── api/
 │       ├── scrape/route.ts   # Cheerio-based job scraper
-│       └── optimize/route.ts # GPT-4o resume optimizer
+│       └── optimize/route.ts # Gemini resume optimizer
 ├── components/
 │   ├── ResumeInput.tsx       # Main input form
 │   ├── ResultsTabs.tsx       # Tabbed results interface
@@ -75,7 +79,7 @@
 │   ├── InterviewPrep.tsx     # Accordion Q&A component
 │   └── DownloadButton.tsx    # jsPDF download button
 ├── lib/
-│   ├── openai.ts             # OpenAI client configuration
+│   ├── openai.ts             # Google Gemini client configuration
 │   ├── scraper.ts            # Cheerio scraping logic
 │   └── pdfExport.ts          # PDF generation utilities
 ├── .env.local.example        # Environment variables template
@@ -86,7 +90,7 @@
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | Your OpenAI API key for GPT-4o access | ✅ Yes |
+| `GEMINI_API_KEY` | Your Google Gemini API key (free tier available at [aistudio.google.com](https://aistudio.google.com/app/apikey)) | ✅ Yes |
 
 ## ⚙️ API Routes
 
@@ -108,7 +112,7 @@ Scrapes job details from a URL using Cheerio.
 ```
 
 ### `POST /api/optimize`
-Optimizes resume using OpenAI GPT-4o.
+Optimizes resume using Google Gemini 1.5 Flash.
 
 **Request:**
 ```json
