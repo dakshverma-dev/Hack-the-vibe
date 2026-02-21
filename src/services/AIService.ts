@@ -56,6 +56,34 @@ class AIService {
     return this.model !== null && this.genAI !== null;
   }
 
+  private checkOpenRouterAvailable(): boolean {
+    return !!this.openRouterApiKey && this.openRouterApiKey !== 'your_openrouter_api_key_here';
+  }
+
+  /**
+   * Unified AI call: OpenRouter (free) → Gemini → throws
+   */
+  private async callAI(prompt: string, systemContext?: string): Promise<string> {
+    // Try OpenRouter free API first
+    if (this.checkOpenRouterAvailable()) {
+      try {
+        return await this.callOpenRouter(prompt, systemContext);
+      } catch (err) {
+        console.warn('⚠️ OpenRouter failed, trying Gemini fallback:', err);
+      }
+    }
+
+    // Try Gemini as fallback
+    if (this.checkModelAvailable()) {
+      const fullPrompt = systemContext ? `${systemContext}\n\n${prompt}` : prompt;
+      const result = await this.model!.generateContent(fullPrompt);
+      const response = await result.response;
+      return response.text();
+    }
+
+    throw new Error('No AI provider available');
+  }
+
   private getMockResponse(context: string): string {
     return `I'm currently running in demo mode. In a real deployment with proper API configuration, I would provide intelligent AI feedback for: ${context}`;
   }
@@ -199,24 +227,7 @@ class AIService {
     `;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return [
-          "Can you explain the difference between a process and a thread?",
-          "How does garbage collection work in your preferred language?",
-          "Explain the concept of RESTful APIs.",
-          "What are the ACID properties in databases?",
-          "Describe a challenging bug you faced and how you solved it.",
-          "What is the difference between TCP and UDP?",
-          "How do you handle state management in frontend applications?",
-          "Explain the concept of dependency injection.",
-          "What are microservices and when should you use them?",
-          "How do you ensure code quality in your projects?"
-        ];
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.callAI(prompt);
 
       // Extract JSON array from response
       const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -234,11 +245,16 @@ class AIService {
     } catch (error) {
       console.error('Error generating questions from resume:', error);
       return [
-        "Tell me about a challenging project you worked on.",
-        "What are your strongest technical skills?",
-        "How do you approach debugging complex issues?",
-        "Explain a technical concept you recently learned.",
-        "What is your preferred programming language and why?"
+        "Can you explain the difference between a process and a thread?",
+        "How does garbage collection work in your preferred language?",
+        "Explain the concept of RESTful APIs.",
+        "What are the ACID properties in databases?",
+        "Describe a challenging bug you faced and how you solved it.",
+        "What is the difference between TCP and UDP?",
+        "How do you handle state management in frontend applications?",
+        "Explain the concept of dependency injection.",
+        "What are microservices and when should you use them?",
+        "How do you ensure code quality in your projects?"
       ];
     }
   }
@@ -262,13 +278,7 @@ class AIService {
     Make it sound like a friendly senior colleague or mentor, not a robot. Use "we" to imply collaboration.`;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return `Hi, how are you? Best of luck for the interview. Let's begin. Please implement a solution for "${problemTitle}". Start by explaining your approach, then proceed with the implementation.`;
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      return await this.callAI(prompt);
     } catch (error) {
       console.error('Error getting initial greeting:', error);
       return `Hi, how are you? Best of luck for the interview. Let's begin. Please implement a solution for "${problemTitle}". Start by explaining your approach, then proceed with the implementation.`;
@@ -322,13 +332,7 @@ class AIService {
     CRITICAL: Always maintain a supportive, mentor-like tone. Never be harsh or overly formal.`;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return this.getFallbackExecutionResponse(code, isFirstRun);
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      return await this.callAI(prompt);
     } catch (error) {
       console.error('Error getting code execution response:', error);
       return this.getFallbackExecutionResponse(code, isFirstRun);
@@ -370,13 +374,7 @@ class AIService {
     Be encouraging and helpful without giving away the solution. Keep it supportive and interview-appropriate, 2-3 sentences.`;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return "I can see you're working hard on this! Sometimes it helps to step back and think about the problem differently. What's the core challenge we're trying to solve here?";
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      return await this.callAI(prompt);
     } catch (error) {
       console.error('Error getting guidance response:', error);
       return "I can see you're working hard on this! Sometimes it helps to step back and think about the problem differently. What's the core challenge we're trying to solve here?";
@@ -410,18 +408,7 @@ class AIService {
     Keep it encouraging and interview-appropriate. Never give the full solution.`;
 
     try {
-      if (!this.checkModelAvailable()) {
-        const fallbackHints = {
-          1: "Let's think about this step by step. What exactly are we trying to find or achieve?",
-          2: "Consider what data structure would help you keep track of elements efficiently.",
-          3: "Think about whether you need to compare every element with every other element, or if there's a smarter way."
-        };
-        return fallbackHints[hintLevel as keyof typeof fallbackHints] || "Keep thinking - you're on the right track!";
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      return await this.callAI(prompt);
     } catch (error) {
       console.error('Error getting progressive hint:', error);
       const fallbackHints = {
@@ -454,13 +441,7 @@ class AIService {
     Length: 3-4 sentences.`;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return `🎉 Great work completing ${problemsSolved} problems! You showed solid problem-solving skills and good coding practices. Keep practicing these patterns - you're on the right track for your next interview!`;
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      return await this.callAI(prompt);
     } catch (error) {
       console.error('Error getting closing interaction:', error);
       return `🎉 Great work completing ${problemsSolved} problems! You showed solid problem-solving skills and good coding practices. Keep practicing these patterns - you're on the right track for your next interview!`;
@@ -559,18 +540,7 @@ class AIService {
     `;
 
     try {
-      if (!this.checkModelAvailable()) {
-        return {
-          timeComplexity: "O(n)",
-          spaceComplexity: "O(1)",
-          explanation: "Analysis not available in demo mode",
-          suggestions: ["Enable API key for full analysis"]
-        };
-      }
-
-      const result = await this.model!.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.callAI(prompt);
 
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -578,7 +548,6 @@ class AIService {
         return JSON.parse(jsonMatch[0]);
       }
 
-      // Fallback if JSON parsing fails
       return {
         timeComplexity: "O(?)",
         spaceComplexity: "O(?)",
@@ -587,22 +556,11 @@ class AIService {
       };
     } catch (error) {
       console.error('Error analyzing code complexity:', error);
-
-      // Provide more helpful error messages
-      if (error instanceof Error && error.message.includes('not found')) {
-        return {
-          timeComplexity: "O(?)",
-          spaceComplexity: "O(?)",
-          explanation: "AI analysis temporarily unavailable. Try manual analysis: count your loops and recursive calls.",
-          suggestions: ["Look for nested loops (O(n²))", "Single loops are usually O(n)", "Consider your data structure usage"]
-        };
-      }
-
       return {
         timeComplexity: "O(?)",
         spaceComplexity: "O(?)",
-        explanation: "Error occurred during analysis.",
-        suggestions: ["Check your code syntax", "Try running the code first", "Consider the algorithm's steps manually"]
+        explanation: "AI analysis temporarily unavailable. Try manual analysis: count your loops and recursive calls.",
+        suggestions: ["Look for nested loops (O(n²))", "Single loops are usually O(n)", "Consider your data structure usage"]
       };
     }
   }
@@ -649,30 +607,7 @@ class AIService {
     `;
 
     try {
-      // Try OpenRouter first if available
-      if (this.openRouterApiKey && this.openRouterApiKey !== 'your_openrouter_api_key_here') {
-        try {
-          console.log('🚀 Using OpenRouter Grok as primary AI...');
-          // Send just the user message, context goes in system prompt
-          return await this.callOpenRouter(userMessage, contextPrompt);
-        } catch (openRouterError) {
-          console.error('❌ OpenRouter failed:', openRouterError);
-          // Continue to try Gemini
-        }
-      }
-
-      // Try Gemini as fallback
-      if (this.checkModelAvailable()) {
-        console.log('Attempting to call Gemini API with model: gemini-2.5-flash');
-        const result = await this.model!.generateContent(contextPrompt);
-        const response = await result.response;
-        const text = response.text();
-        console.log('Gemini API response received successfully');
-        return text;
-      }
-
-      // If no AI available, use mock responses
-      return this.getIntelligentMockResponse(userMessage, conversationHistory, currentCode, 'coding');
+      return await this.callAI(userMessage, contextPrompt);
     } catch (error) {
       console.error('Error getting AI response:', error);
       console.error('Error details:', {

@@ -61,7 +61,7 @@ export interface VoiceSettings {
   autoSpeak: boolean;
   preferredVoice: string;
   language: string;
-  useElevenLabs: boolean;
+  useSarvamAI: boolean;
 }
 
 export interface VoiceServiceInterface {
@@ -108,28 +108,30 @@ export class VoiceService implements VoiceServiceInterface {
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
 
-  // ElevenLabs Configuration
-  private elevenLabsApiKey: string = '';
-  private elevenLabsVoiceId: string = '21m00Tcm4TlvDq8ikWAM'; // Rachel - Natural, calm, clear
+  // Sarvam AI Configuration
+  private sarvamApiKey: string = '';
+  private sarvamSpeaker: string = 'Amelia'; // Natural English voice
+  private sarvamModel: string = 'bulbul:v2';
+  private sarvamLanguage: string = 'en-IN';
 
   private settings: VoiceSettings = {
     speechRate: 1.0,
     speechPitch: 1.0,
     speechVolume: 1.0,
     autoSpeak: true,
-    preferredVoice: 'Google हिन्दी', // Default fallback
+    preferredVoice: 'Google हिन्दी', // Default fallback for Web Speech API
     language: 'en-IN',
-    useElevenLabs: true // Enable ElevenLabs voice
+    useSarvamAI: true // Enable Sarvam AI voice
   };
 
   constructor() {
     if (typeof window !== 'undefined') {
       // Load environment variables from Next.js public runtime config
-      this.elevenLabsApiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '';
-      this.elevenLabsVoiceId = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+      this.sarvamApiKey = process.env.NEXT_PUBLIC_SARVAM_API_KEY || '';
+      this.sarvamSpeaker = process.env.NEXT_PUBLIC_SARVAM_SPEAKER || 'Amelia';
       
-      console.log('🔑 ElevenLabs API Key loaded:', this.elevenLabsApiKey ? `${this.elevenLabsApiKey.substring(0, 8)}...` : 'NOT SET');
-      console.log('🎤 ElevenLabs Voice ID:', this.elevenLabsVoiceId);
+      console.log('🔑 Sarvam AI API Key loaded:', this.sarvamApiKey ? `${this.sarvamApiKey.substring(0, 8)}...` : 'NOT SET');
+      console.log('🎤 Sarvam AI Speaker:', this.sarvamSpeaker);
       
       this.initialize();
     }
@@ -149,7 +151,7 @@ export class VoiceService implements VoiceServiceInterface {
           };
         }
 
-        // Initialize Audio Context for ElevenLabs (use safe typed constructor for vendor prefixes)
+        // Initialize Audio Context for Sarvam AI TTS (use safe typed constructor for vendor prefixes)
         type AudioContextConstructor = new (contextOptions?: AudioContextOptions) => AudioContext;
         const win = window as unknown as { AudioContext?: AudioContextConstructor; webkitAudioContext?: AudioContextConstructor };
         const AudioCtxClass = win.AudioContext || win.webkitAudioContext;
@@ -272,52 +274,65 @@ export class VoiceService implements VoiceServiceInterface {
     return true;
   }
 
-  private async speakWithElevenLabs(text: string, options?: {
+  private async speakWithSarvamAI(text: string, options?: {
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (error: unknown) => void;
   }): Promise<void> {
-    if (!this.elevenLabsApiKey) {
-      throw new Error('ElevenLabs API key not configured');
-    }
-
-    if (!this.elevenLabsVoiceId) {
-      throw new Error('ElevenLabs voice ID not configured');
+    if (!this.sarvamApiKey) {
+      throw new Error('Sarvam AI API key not configured');
     }
 
     try {
-      this.log(`🔊 Generating ElevenLabs audio with voice: ${this.elevenLabsVoiceId}`);
-      this.log(`API Key present: ${this.elevenLabsApiKey ? 'Yes' : 'No'}`);
+      // Truncate text to Sarvam limit (1500 chars for v2, 2500 for v3)
+      const maxLen = this.sarvamModel === 'bulbul:v3' ? 2500 : 1500;
+      const truncatedText = text.length > maxLen ? text.substring(0, maxLen) : text;
+
+      this.log(`🔊 Generating Sarvam AI audio with speaker: ${this.sarvamSpeaker}`);
+      this.log(`API Key present: ${this.sarvamApiKey ? 'Yes' : 'No'}`);
       options?.onStart?.();
       this.isSpeaking = true;
 
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${this.elevenLabsVoiceId}`, {
+      const response = await fetch('https://api.sarvam.ai/text-to-speech', {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': this.elevenLabsApiKey
+          'api-subscription-key': this.sarvamApiKey
         },
         body: JSON.stringify({
-          text: text,
-          model_id: "eleven_turbo_v2_5",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.8,
-            style: 0.0,
-            use_speaker_boost: true
-          }
+          text: truncatedText,
+          target_language_code: this.sarvamLanguage,
+          speaker: this.sarvamSpeaker,
+          model: this.sarvamModel,
+          pace: this.settings.speechRate,
+          pitch: this.settings.speechPitch - 1, // Sarvam range: -0.75 to 0.75, our default is 1.0
+          loudness: this.settings.speechVolume,
+          speech_sample_rate: 22050,
+          enable_preprocessing: true
         })
       });
 
-      this.log(`ElevenLabs response status: ${response.status}`);
+      this.log(`Sarvam AI response status: ${response.status}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`ElevenLabs API error: ${response.status} ${JSON.stringify(errorData)}`);
+        throw new Error(`Sarvam AI API error: ${response.status} ${JSON.stringify(errorData)}`);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
+      const data = await response.json();
+
+      if (!data.audios || data.audios.length === 0) {
+        throw new Error('No audio returned from Sarvam AI');
+      }
+
+      // Decode base64 WAV audio
+      const base64Audio = data.audios[0];
+      const binaryString = atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const arrayBuffer = bytes.buffer;
 
       // Stop any currently playing audio from both sources
       this.stopSpeaking();
@@ -343,16 +358,15 @@ export class VoiceService implements VoiceServiceInterface {
       source.onended = () => {
         this.isSpeaking = false;
         this.currentSource = null;
-        this.currentSource = null;
-        this.log('✅ ElevenLabs playback finished');
+        this.log('✅ Sarvam AI playback finished');
         options?.onEnd?.();
       };
 
       source.start(0);
-      this.log('▶️ ElevenLabs playback started');
+      this.log('▶️ Sarvam AI playback started');
 
     } catch (error) {
-      console.error('ElevenLabs TTS error:', error);
+      console.error('Sarvam AI TTS error:', error);
       this.isSpeaking = false;
       options?.onError?.(error);
       throw error; // Re-throw to trigger fallback
@@ -372,16 +386,16 @@ export class VoiceService implements VoiceServiceInterface {
       return;
     }
 
-    // Try ElevenLabs first if enabled
-    if (this.settings.useElevenLabs && this.elevenLabsApiKey) {
+    // Try Sarvam AI first if enabled
+    if (this.settings.useSarvamAI && this.sarvamApiKey) {
       try {
-        this.log('🎙️ Attempting ElevenLabs TTS...');
-        await this.speakWithElevenLabs(text, options);
-        this.log('✅ ElevenLabs TTS succeeded');
+        this.log('🎙️ Attempting Sarvam AI TTS...');
+        await this.speakWithSarvamAI(text, options);
+        this.log('✅ Sarvam AI TTS succeeded');
         return;
       } catch (error) {
-        console.warn('⚠️ ElevenLabs failed, falling back to Web Speech API', error);
-        this.log(`ElevenLabs error details: ${error instanceof Error ? error.message : String(error)}`);
+        console.warn('⚠️ Sarvam AI failed, falling back to Web Speech API', error);
+        this.log(`Sarvam AI error details: ${error instanceof Error ? error.message : String(error)}`);
         // Fall through to Web Speech API
       }
     }
@@ -466,7 +480,7 @@ export class VoiceService implements VoiceServiceInterface {
       this.synthesis.cancel();
     }
 
-    // Stop ElevenLabs Audio
+    // Stop Sarvam AI Audio
     if (this.currentSource) {
       this.currentSource.stop();
       this.currentSource = null;
