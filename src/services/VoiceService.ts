@@ -110,8 +110,8 @@ export class VoiceService implements VoiceServiceInterface {
 
   // Sarvam AI Configuration
   private sarvamApiKey: string = '';
-  private sarvamSpeaker: string = 'Amelia'; // Natural English voice
-  private sarvamModel: string = 'bulbul:v2';
+  private sarvamSpeaker: string = 'amelia'; // Natural English voice
+  private sarvamModel: string = 'bulbul:v3';
   private sarvamLanguage: string = 'en-IN';
 
   private settings: VoiceSettings = {
@@ -128,7 +128,7 @@ export class VoiceService implements VoiceServiceInterface {
     if (typeof window !== 'undefined') {
       // Load environment variables from Next.js public runtime config
       this.sarvamApiKey = process.env.NEXT_PUBLIC_SARVAM_API_KEY || '';
-      this.sarvamSpeaker = process.env.NEXT_PUBLIC_SARVAM_SPEAKER || 'Amelia';
+      this.sarvamSpeaker = (process.env.NEXT_PUBLIC_SARVAM_SPEAKER || 'amelia').toLowerCase();
       
       console.log('🔑 Sarvam AI API Key loaded:', this.sarvamApiKey ? `${this.sarvamApiKey.substring(0, 8)}...` : 'NOT SET');
       console.log('🎤 Sarvam AI Speaker:', this.sarvamSpeaker);
@@ -293,23 +293,28 @@ export class VoiceService implements VoiceServiceInterface {
       options?.onStart?.();
       this.isSpeaking = true;
 
+      const requestBody: Record<string, unknown> = {
+        inputs: [truncatedText],
+        target_language_code: this.sarvamLanguage,
+        speaker: this.sarvamSpeaker,
+        model: this.sarvamModel,
+        pace: this.settings.speechRate,
+        speech_sample_rate: 22050,
+        enable_preprocessing: true
+      };
+
+      if (this.sarvamModel !== 'bulbul:v3') {
+        requestBody.pitch = this.settings.speechPitch - 1; // Sarvam range: -0.75 to 0.75, our default is 1.0
+        requestBody.loudness = this.settings.speechVolume;
+      }
+
       const response = await fetch('https://api.sarvam.ai/text-to-speech', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'api-subscription-key': this.sarvamApiKey
         },
-        body: JSON.stringify({
-          text: truncatedText,
-          target_language_code: this.sarvamLanguage,
-          speaker: this.sarvamSpeaker,
-          model: this.sarvamModel,
-          pace: this.settings.speechRate,
-          pitch: this.settings.speechPitch - 1, // Sarvam range: -0.75 to 0.75, our default is 1.0
-          loudness: this.settings.speechVolume,
-          speech_sample_rate: 22050,
-          enable_preprocessing: true
-        })
+        body: JSON.stringify(requestBody)
       });
 
       this.log(`Sarvam AI response status: ${response.status}`);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bot, Send, Loader2, Mic, MicOff, Sparkles } from 'lucide-react';
 import AIService from '@/services/AIService';
 import VoiceControls from './VoiceControls';
@@ -49,6 +49,7 @@ export default function EnhancedChatInterface({
   const [isSpeakingEnabled] = useState(true);
   const [isHandsFreeMode, setIsHandsFreeMode] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const lastSpokenMessageIdRef = useRef<string | null>(null);
 
   // Initialize voice service on mount and on user interaction
   useEffect(() => {
@@ -126,6 +127,7 @@ export default function EnhancedChatInterface({
 
       // Speak the AI response if voice is enabled
       if (isSpeakingEnabled && voiceService.isSupported().speechSynthesis) {
+        lastSpokenMessageIdRef.current = codeResponseMessage.id;
         setIsAiSpeaking(true);
         voiceService.speakText(aiCodeResponse, {
           onEnd: () => setIsAiSpeaking(false),
@@ -148,8 +150,9 @@ export default function EnhancedChatInterface({
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.type === 'assistant' && isSpeakingEnabled && voiceService.isSupported().speechSynthesis) {
-        // Only speak new AI messages (not initial messages or code responses which are handled above)
-        if (!aiCodeResponse) {
+        // Only speak new AI messages that haven't been spoken yet
+        if (lastSpokenMessageIdRef.current !== lastMessage.id) {
+          lastSpokenMessageIdRef.current = lastMessage.id;
           setIsAiSpeaking(true);
           voiceService.speakText(lastMessage.content, {
             onEnd: () => setIsAiSpeaking(false),
@@ -164,7 +167,7 @@ export default function EnhancedChatInterface({
         }
       }
     }
-  }, [messages, isSpeakingEnabled, aiCodeResponse]);
+  }, [messages, isSpeakingEnabled]);
 
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
